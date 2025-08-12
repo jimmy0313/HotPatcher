@@ -44,6 +44,15 @@
 #include "AssetCompilingManager.h"
 #endif
 
+#if UE_VERSION_NEWER_THAN(5,5,0)
+#include "ZenCookArtifactReader.h"
+#endif
+
+#include "Engine/Texture.h"
+#include "Engine/Texture2D.h"
+#include "Materials/Material.h"
+#include "UObject/UObjectIterator.h"
+
 DEFINE_LOG_CATEGORY(LogHotPatcherCoreHelper);
 
 TArray<FString> UFlibHotPatcherCoreHelper::GetAllCookOption()
@@ -347,7 +356,18 @@ FSavePackageContext* UFlibHotPatcherCoreHelper::CreateSaveContext(const ITargetP
 	FString WriterDebugName;
 	if (bUseZenLoader)
 	{
+#if UE_VERSION_OLDER_THAN(5,5,0)
 		PackageWriter = new FZenStoreWriter(ResolvedProjectPath, ResolvedMetadataPath, TargetPlatform);
+
+#else
+		FZenCookArtifactReader reader = FZenCookArtifactReader(ResolvedProjectPath, 
+												ResolvedMetadataPath,
+												TargetPlatform);
+		TSharedRef<FZenCookArtifactReader> Reader = MakeShareable<FZenCookArtifactReader>(&reader);
+		PackageWriter = new FZenStoreWriter(ResolvedProjectPath, ResolvedMetadataPath, TargetPlatform,Reader);
+
+#endif
+		
 		WriterDebugName = TEXT("ZenStore");
 	}
 	else
@@ -642,7 +662,9 @@ bool UFlibHotPatcherCoreHelper::CookPackage(
 			PackageArgs.SaveFlags = SaveFlags;
 			PackageArgs.Error = GError;
 			PackageArgs.SavePackageContext = CurrentPlatformPackageContext;
+			#if UE_VERSION_OLDER_THAN(5,6,0)
 			PackageArgs.TargetPlatform = Platform.Value;
+			#endif
 			PackageArgs.bSlowTask = false;
 			PackageArgs.FinalTimeStamp = FDateTime::MinValue();
 			#if UE_VERSION_OLDER_THAN(5,4,0)
@@ -685,7 +707,11 @@ bool UFlibHotPatcherCoreHelper::CookPackage(
 				// TODO: Reenable BuildDefinitionList once FCbPackage support for empty FCbObjects is in
 				//Info.Attachments.Add({ "BuildDefinitionList", BuildDefinitionList });
 				Info.WriteOptions = IPackageWriter::EWriteOptions::Write;
+				#if UE_VERSION_OLDER_THAN(5,6,0)
 				if (!!(SaveFlags & SAVE_ComputeHash))
+				#else
+				if (!!(SaveFlags))
+				#endif
 				{
 					Info.WriteOptions |= IPackageWriter::EWriteOptions::ComputeHash;
 				}
@@ -776,10 +802,24 @@ bool UFlibHotPatcherCoreHelper::CookPackagesByCmdlet(
 			}
 		}
 		RealCookedSavePath = RealCookedSavePath.Replace(TEXT("/Cooked/"),TEXT("/CmdletCooked/"));
-		for(const auto& SoftObjectPath:ObjectPaths){ CookActionCallback.OnCookBegin(SoftObjectPath,CookPlatformPair.Key); }
+		if (CookActionCallback.OnAssetCooked)
+		{
+			for(const auto& SoftObjectPath:ObjectPaths){ CookActionCallback.OnCookBegin(SoftObjectPath,CookPlatformPair.Key); }
+		}
+		else
+		{
+			UE_LOG(LogHotPatcher,Error,TEXT("CookActionCallback.OnAssetCooked call back Null"));
+		}
 		bool bCookStatus = CookByCmdlet(LongPackageNames,CookPlatformPair.Key,RealCookedSavePath, bSharedMaterialLibrary);
         ESavePackageResult result = bCookStatus ? ESavePackageResult::Success : ESavePackageResult::Error;
-		for(const auto& SoftObjectPath:ObjectPaths){ CookActionCallback.OnAssetCooked(SoftObjectPath,CookPlatformPair.Key,result); }
+		
+		if (CookActionCallback.OnAssetCooked)
+		{
+			for(const auto& SoftObjectPath:ObjectPaths){ CookActionCallback.OnAssetCooked(SoftObjectPath,CookPlatformPair.Key,result); }
+		}else
+		{
+			UE_LOG(LogHotPatcher,Error,TEXT("CookActionCallback.OnAssetCooked call back Null"));
+		}
 
 		FString CleanCmdletDir = SrcCookedPath.Replace(*PlatformName,TEXT(""));
 		CleanCmdletDir = CleanCmdletDir.Replace(TEXT("/Cooked/"),TEXT("/CmdletCooked/"));
@@ -1617,7 +1657,7 @@ bool UFlibHotPatcherCoreHelper::SerializeAssetRegistry(IAssetRegistry* AssetRegi
 	AssetRegistry->InitializeTemporaryAssetRegistryState(State, SaveOptions, true);
 	for(const auto& AssetPackagePath:PackagePaths)
 	{
-		if (State.GetAssetByObjectPath(FName(*AssetPackagePath)))
+		if (State.GetAssetByObjectPath(FName(*AssetPackagePath).ToString()))
 		{
 			UE_LOG(LogHotPatcherCoreHelper, Warning, TEXT("%s already add to AssetRegistryState!"), *AssetPackagePath);
 			continue;
@@ -1848,7 +1888,9 @@ FProjectPackageAssetCollection UFlibHotPatcherCoreHelper::ImportProjectSettingsP
 		// allow the game to fill out the asset registry, as well as get a list of objects to always cook
 		TArray<FString> FilesInPathStrings;
 		PRAGMA_DISABLE_DEPRECATION_WARNINGS;
+		#if UE_VERSION_OLDER_THAN(5,6,0)
 		FGameDelegates::Get().GetCookModificationDelegate().ExecuteIfBound(FilesInPathStrings);
+		#endif
 		PRAGMA_ENABLE_DEPRECATION_WARNINGS;
 		for(const auto& BuildFilename:FilesInPathStrings)
 		{
@@ -2383,8 +2425,17 @@ void UFlibHotPatcherCoreHelper::CacheForCookedPlatformData(
 #endif
     				}
     				{
+#if UE_VERSION_OLDER_THAN(5,6,0)
     					bool bCleanupIsRequired = World->PreSaveRoot(TEXT(""));
     					WorldsToPostSaveRoot.Add(World, bCleanupIsRequired);
+#else
+    					FObjectSaveContextData ContextData;
+    					ContextData.SaveFlags = SaveFlags;
+    					FObjectPreSaveRootContext Context(ContextData);
+    					World->PreSaveRoot(Context);
+    					WorldsToPostSaveRoot.Add(World, true);
+#endif
+    					
     				}
     				GIsCookerLoadingPackage = false;
     			}
@@ -2419,7 +2470,10 @@ void UFlibHotPatcherCoreHelper::CacheForCookedPlatformData(
     					SCOPED_NAMED_EVENT_TEXT("Export PreSave",FColor::Red);
     					GIsCookerLoadingPackage = true;
     					{
-    						ExportObj->PreSave(Platform);
+    						FObjectSaveContextData ContextData;
+    						ContextData.SaveFlags = SaveFlags;
+    						FObjectPreSaveContext Context(ContextData);
+    						ExportObj->PreSave(Context);
     					}
     					GIsCookerLoadingPackage = false;
     				}
@@ -2471,7 +2525,9 @@ void UFlibHotPatcherCoreHelper::CacheForCookedPlatformData(
 #endif
 			UWorld* World = WorldIt.Key();
 			check(World);
-			World->PostSaveRoot(WorldIt.Value());
+			FObjectSaveContextData ContextData;
+			FObjectPostSaveRootContext Context(ContextData);
+			World->PostSaveRoot(Context);
 		}
 	}
 	
@@ -2569,7 +2625,7 @@ void UFlibHotPatcherCoreHelper::WaitObjectsCachePlatformDataComplete(TSet<UObjec
 uint32 UFlibHotPatcherCoreHelper::GetCookSaveFlag(UPackage* Package, bool bUnversioned, bool bStorageConcurrent,
                                                   bool CookLinkerDiff)
 {
-	uint32 SaveFlags = SAVE_KeepGUID | SAVE_Async| SAVE_ComputeHash | (bUnversioned ? SAVE_Unversioned : 0);
+	uint32 SaveFlags = SAVE_KeepGUID | SAVE_Async | (bUnversioned ? SAVE_Unversioned : 0);
 
 #if ENGINE_MAJOR_VERSION >4 || ENGINE_MINOR_VERSION >25
 	// bool CookLinkerDiff = false;
@@ -2688,6 +2744,7 @@ FString UFlibHotPatcherCoreHelper::GetSavePackageResultStr(ESavePackageResult Re
 			Str = TEXT("ReferencedOnlyByEditorOnlyData");
 			break;
 		}
+	default: break;;
 	}
 	return Str;
 }

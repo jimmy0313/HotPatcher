@@ -2,6 +2,8 @@
 #include "CoreMinimal.h"
 #include "Resources/Version.h"
 #include "Misc/EngineVersionComparison.h"
+#include "AssetRegistry/AssetRegistryState.h"
+
 #if WITH_PACKAGE_CONTEXT && ENGINE_MAJOR_VERSION > 4
 #include "Serialization/PackageWriter.h"
 #include "PackageWriterToSharedBuffer.h"
@@ -15,6 +17,8 @@ public:
 		Result.bDiffModeSupported = true;
 		return Result;
 	}
+	virtual ECommitStatus GetCommitStatus(FName PackageName) override;
+	virtual void GetOplogAttachments(TArrayView<FName> PackageNames, TArrayView<FUtf8StringView> AttachmentKeys, TUniqueFunction<void(FName PackageName, FUtf8StringView AttachmentKey, FCbObject&& Attachment)>&& Callback) override;
 
 	virtual void BeginPackage(const FBeginPackageInfo& Info) override;
 #if !UE_VERSION_NEWER_THAN(5,1,1) // FOR UE5.1

@@ -12,6 +12,7 @@
 #include "Resources/Version.h"
 #include "CoreGlobals.h"
 #include "HttpManager.h"
+#include "Misc/ConfigCacheIni.h"
 
 FProjectVersionDesc FCountServerlessWrapper::MakeCurrentProject()
 {
@@ -67,8 +68,9 @@ void FCountServerlessWrapper::Processor()
 void FCountServerlessWrapper::RequestObjectID()
 {
 	CancelRequest(ObjectIDRequest);
-	FHttpModule::Get().SetHttpTimeout(5.0);
+	// FHttpModule::Get().SetHttpTimeout(5.0);
 	ObjectIDRequest = FHttpModule::Get().CreateRequest();
+	ObjectIDRequest->SetTimeout(5.0);
 	ObjectIDRequest->OnProcessRequestComplete().BindRaw(this, &FCountServerlessWrapper::OnObjectIdReceived);
 	ObjectIDRequest->SetURL(RequestInfo.Host);
 	ObjectIDRequest->SetHeader(TEXT("X-LC-Id"),Decode(RequestInfo.AppId));

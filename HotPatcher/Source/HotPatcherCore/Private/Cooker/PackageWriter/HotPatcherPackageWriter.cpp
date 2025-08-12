@@ -1,6 +1,10 @@
 
 #include "Cooker/PackageWriter/HotPatcherPackageWriter.h"
 
+#include "HAL/FileManager.h"
+#include "Misc/Paths.h"
+#include "Serialization/MemoryWriter.h"
+
 #if WITH_PACKAGE_CONTEXT && ENGINE_MAJOR_VERSION > 4
 #include "AssetRegistry/IAssetRegistry.h"
 #include "Async/Async.h"
@@ -15,6 +19,17 @@ void FHotPatcherPackageWriter::AddToExportsSize(int64& ExportsSize)
 	TPackageWriterToSharedBuffer<ICookedPackageWriter>::AddToExportsSize(ExportsSize);
 }
 #endif
+
+IPackageWriter::ECommitStatus FHotPatcherPackageWriter::GetCommitStatus(FName PackageName)
+{
+	return IPackageWriter::ECommitStatus::Success;
+}
+
+void FHotPatcherPackageWriter::GetOplogAttachments(TArrayView<FName> PackageNames,
+                                                   TArrayView<FUtf8StringView> AttachmentKeys,
+                                                   TUniqueFunction<void(FName PackageName, FUtf8StringView AttachmentKey, FCbObject&& Attachment)>&& Callback)
+{
+}
 
 void FHotPatcherPackageWriter::BeginPackage(const FBeginPackageInfo& Info)
 {

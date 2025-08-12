@@ -28,6 +28,7 @@
 #include "Kismet/KismetTextLibrary.h"
 #include "PakFileUtilities.h"
 #include "Misc/EngineVersionComparison.h"
+#include "Widgets/Docking/SDockTab.h"
 
 #if !UE_VERSION_OLDER_THAN(5,1,0)
 	typedef FAppStyle FEditorStyle;
@@ -520,7 +521,7 @@ void FHotPatcherEditorModule::OnAddToPatchSettings(const FToolMenuContext& MenuC
 	{
 		FPatcherSpecifyAsset PatchSettingAssetElement;
 		FSoftObjectPath AssetObjectPath;
-		AssetObjectPath.SetPath(UFlibAssetManageHelper::GetObjectPathByAssetData(AssetData));
+		AssetObjectPath.SetPath(UFlibAssetManageHelper::GetObjectPathByAssetData(AssetData).ToString());
 		PatchSettingAssetElement.Asset = AssetObjectPath;
 		PatchSettingAssetElement.bAnalysisAssetDependencies = true;
 		AssetsSoftPath.AddUnique(PatchSettingAssetElement);
@@ -591,7 +592,7 @@ void FHotPatcherEditorModule::OnCookPlatform(ETargetPlatform Platform)
 	USingleCookerProxy* SingleCookerProxy = NewObject<USingleCookerProxy>();
 	SingleCookerProxy->AddToRoot();
 	SingleCookerProxy->Init(&EmptySetting);
-	SingleCookerProxy->OnAssetCooked.AddLambda([CookNotifyLambda](const FSoftObjectPath& ObjectPath,ETargetPlatform Platform,ESavePackageResult Result)
+	SingleCookerProxy->GetOnCookAssetCookedEvent().AddLambda([CookNotifyLambda](const FSoftObjectPath& ObjectPath,ETargetPlatform Platform,ESavePackageResult Result)
 	{
 		CookNotifyLambda(ObjectPath.GetAssetPathString(),Platform,Result == ESavePackageResult::Success);
 	});

@@ -32,7 +32,7 @@ struct HOTPATCHERCORE_API FCookerShaderOptions
 };
 
 USTRUCT(BlueprintType)
-struct HOTPATCHERCORE_API FSingleCookerSettings:public FHotPatcherCookerSettingBase
+struct HOTPATCHERCORE_API FSingleCookerSettings:public FPatcherEntitySettingBase
 {
 	GENERATED_BODY()
 public:
